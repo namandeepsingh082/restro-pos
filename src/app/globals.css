@@ -1,0 +1,321 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Base
+   No web fonts are loaded anywhere: the app has to work with the network cable
+   pulled out, and a missing font would reflow the whole billing screen.
+--------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-counter text-ink antialiased;
+  /* Stops iPad/Android from bouncing the whole POS while scrolling the grid. */
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  /* Nothing on any screen may push the page sideways on a phone. */
+  overflow-x: hidden;
+}
+
+/* ---------------------------------------------------------------------------
+   Viewport height
+   `100vh` on a phone is the height of the window *without* the browser's
+   collapsing toolbars, so a 100vh app column puts its last row — the Save &
+   print button — underneath the address bar. `dvh` is the visible height and
+   changes as the toolbar hides. The doubled declaration is the fallback: a
+   browser that does not know dvh keeps the vh value.
+--------------------------------------------------------------------------- */
+.h-viewport {
+  height: 100vh;
+  height: 100dvh;
+}
+.min-h-viewport {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+/* Dialogs and bottom sheets: never taller than the screen, always scrollable. */
+.max-h-sheet {
+  max-height: 92vh;
+  max-height: 92dvh;
+}
+
+/* iPhone home indicator / Android gesture bar. Anything pinned to the bottom
+   edge has to sit above it, and anything above such a bar has to clear it. */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Room for the billing screen's fixed Menu/Cart bar, plus the home indicator
+   below it. Scoped to phone widths so that on a laptop — where the bar is
+   `md:hidden` — these classes do nothing and the normal padding applies. */
+@media (max-width: 767px) {
+  .pb-bottom-bar {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+  .mb-bottom-bar {
+    margin-bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Kills the ~300ms delay some Android browsers add before a tap fires. On a
+   billing counter that delay reads as the app being slow. */
+button,
+a,
+[role='button'],
+label,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+/* Numbers must never dance when they change — every figure is tabular. */
+.num {
+  font-variant-numeric: tabular-nums;
+  @apply font-mono;
+}
+
+*:focus-visible {
+  outline: 2px solid #0e5c63;
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Components
+--------------------------------------------------------------------------- */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded border border-counter-line
+           bg-white px-3 py-2 text-sm font-medium text-ink
+           hover:bg-counter-deep active:bg-counter-line disabled:opacity-40
+           disabled:pointer-events-none select-none;
+  }
+  .btn-primary {
+    @apply btn border-primary-dark bg-primary text-white hover:bg-primary-dark active:bg-primary-dark;
+  }
+  .btn-danger {
+    @apply btn border-nonveg bg-white text-nonveg hover:bg-red-50;
+  }
+  .btn-lg {
+    /* 48px minimum touch target for counter tablets */
+    @apply min-h-[48px] px-4 text-base;
+  }
+  .field {
+    @apply w-full rounded border border-counter-line bg-white px-3 py-2 text-sm
+           text-ink placeholder:text-ink-mute focus:border-primary focus:outline-none;
+  }
+  .label {
+    @apply mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-mute;
+  }
+  .panel {
+    @apply rounded-lg border border-counter-line bg-counter-card shadow-panel;
+  }
+  .chip {
+    @apply inline-flex items-center rounded-sm px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide;
+  }
+  .th {
+    @apply px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-mute;
+  }
+  .td {
+    @apply px-3 py-2 text-sm;
+  }
+  /* One row of a list that becomes a card on a phone and a table row on a
+     laptop. Used by Orders, where reaching the actions column by scrolling
+     sideways was the worst thing about the small-screen layout. */
+  .card-row {
+    @apply rounded-lg border border-counter-line bg-white p-3 shadow-panel;
+  }
+  .card-label {
+    @apply text-[11px] font-semibold uppercase tracking-wide text-ink-mute;
+  }
+}
+
+/* A horizontally scrollable region announces itself with a soft edge instead of
+   leaving the reader to guess that there is more to the right. */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.scroll-x::-webkit-scrollbar {
+  height: 8px;
+}
+.scroll-x::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: #c3ccd0;
+}
+
+/* The header's navigation: no scrollbar (it would sit on top of the links) and
+   a fade on the trailing edge so a clipped label reads as "there is more this
+   way" instead of as a rendering fault. */
+.nav-scroll {
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent 100%);
+}
+.nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+@media (min-width: 1024px) {
+  /* Everything fits by this width, so the fade would only dim the last link. */
+  .nav-scroll {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Thermal receipt
+   The receipt is a fixed-width monospace column measured in millimetres so the
+   on-screen preview is literally the paper. 58mm paper prints 32 characters
+   per line, 80mm prints 48 — the layout is built around those two counts.
+--------------------------------------------------------------------------- */
+.receipt {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  color: #000;
+  background: #fff;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.receipt-58 {
+  width: 58mm;
+  padding: 2mm 2mm 4mm;
+  font-size: 10px;
+  line-height: 1.35;
+}
+.receipt-80 {
+  width: 80mm;
+  padding: 3mm 3mm 5mm;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.receipt hr {
+  border: 0;
+  border-top: 1px dashed #000;
+  margin: 1.5mm 0;
+}
+.receipt .rule-solid {
+  border-top: 1px solid #000;
+}
+.receipt table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.receipt td,
+.receipt th {
+  padding: 0;
+  vertical-align: top;
+}
+.receipt .r {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.receipt .c {
+  text-align: center;
+}
+.receipt .b {
+  font-weight: 700;
+}
+.receipt .big {
+  font-size: 1.25em;
+  font-weight: 700;
+}
+
+/* Screen-only paper preview */
+.paper-shadow {
+  box-shadow: 0 2px 12px rgba(15, 20, 23, 0.18);
+}
+
+/* ---------------------------------------------------------------------------
+   Print
+   Zero page margin, no headers/footers, and `size: auto` height so the printer
+   cuts right after the last line instead of ejecting a blank page.
+--------------------------------------------------------------------------- */
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto;
+    height: auto;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .receipt {
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+  /* `width: auto` lets the slip fill the roll's printable area, whatever the
+     driver reports it to be. But the same rule is what wrecks a Save-as-PDF:
+     that destination often ignores `@page size` and hands us an A4 sheet, and
+     an auto-width receipt then stretches 210mm wide with the columns flung
+     apart. Capping at the paper width keeps the slip a slip on any page size,
+     and `margin: 0 auto` centres it on the sheet — on a roll the cap is never
+     reached, so thermal output is untouched. */
+  .receipt-58,
+  .receipt-80 {
+    width: auto !important;
+    padding: 0 1mm !important;
+    margin: 0 auto !important;
+  }
+  .receipt-58 {
+    max-width: 58mm;
+  }
+  .receipt-80 {
+    max-width: 80mm;
+  }
+  /* Dashed rules and the veg/non-veg mark are the slip's only ink besides text;
+     without this some browsers drop them as "background graphics". */
+  .receipt,
+  .receipt * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Never let a bill split across two slips of paper. */
+  .receipt,
+  .receipt * {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* An offline slip is portalled onto <body> next to the app. While it is
+     printing, every sibling is hidden so the roll carries the bill alone. */
+  body.printing-slip > *:not(.local-slip) {
+    display: none !important;
+  }
+  body.printing-slip .local-slip {
+    display: block !important;
+    position: static !important;
+  }
+  /* The slip that exists only to be turned into a PDF is never printed. */
+  .export-slip {
+    display: none !important;
+  }
+}
+
+/* Off-screen until it is time to print. */
+.local-slip,
+.export-slip {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+}
